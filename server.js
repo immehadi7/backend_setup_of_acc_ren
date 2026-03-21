@@ -15,7 +15,17 @@ connectDB()
 const app = express()
 
 app.use(helmet())
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }))
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow any localhost port automatically
+    if (!origin || origin.startsWith('http://localhost')) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
+  credentials: true
+})) //this line change
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 

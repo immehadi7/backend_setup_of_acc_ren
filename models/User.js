@@ -27,42 +27,41 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       minlength: [6, '密码至少6位'],
-      select: false, // never return password in queries
+      select: false,
     },
-    avatar: {
-      type: String,
-      default: '',
-    },
+    avatar:   { type: String, default: '' },
     role: {
       type: String,
       enum: ['user', 'seller', 'admin'],
       default: 'user',
     },
-    isVerified: {
-      type: Boolean,
-      default: false,
-    },
-    balance: {
-      type: Number,
-      default: 0,
-    },
-    // seller stats
-    totalOrders: { type: Number, default: 0 },
-    totalEarnings: { type: Number, default: 0 },
-    rating: { type: Number, default: 5.0 },
+    isVerified: { type: Boolean, default: false },
+    isBanned:   { type: Boolean, default: false },
+    banReason:  { type: String,  default: ''    },
+    balance:    { type: Number,  default: 0     },
+
+    // Stats
+    totalOrders:   { type: Number, default: 0   },
+    totalEarnings: { type: Number, default: 0   },
+    rating:        { type: Number, default: 5.0 },
+
+    // Security
+    lastLogin:        { type: Date },
+    lastLoginIP:      { type: String },
+    loginCount:       { type: Number, default: 0 },
+    activeSessionCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 )
 
 // Hash password before saving
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next()
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return
   const salt = await bcrypt.genSalt(10)
   this.password = await bcrypt.hash(this.password, salt)
-  next()
 })
 
-// Compare password method
+// Compare password
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password)
 }

@@ -10,21 +10,30 @@ import {
   getMyAccounts,
 } from '../controllers/account.controller.js'
 import { protect, authorize } from '../middleware/auth.middleware.js'
+import Account from '../models/Account.js'
 
 const router = express.Router()
 
-// Public routes
+// Public
 router.get('/',    getAccounts)
 router.get('/:id', getAccount)
 
-// Protected routes (must be logged in)
-router.get('/user/my',          protect, getMyAccounts)
-router.post('/',                protect, createAccount)
-router.put('/:id',              protect, updateAccount)
-router.delete('/:id',           protect, deleteAccount)
-router.patch('/:id/status',     protect, updateStatus)
+// Protected
+router.get('/user/my',      protect, getMyAccounts)
+router.post('/',             protect, createAccount)
+router.put('/:id',           protect, updateAccount)
+router.delete('/:id',        protect, deleteAccount)
+router.patch('/:id/status',  protect, updateStatus)
 
-// Admin only
+// Admin
 router.patch('/:id/approve', protect, authorize('admin'), approveAccount)
+router.get('/admin/all',     protect, authorize('admin'), async (req, res, next) => {
+  try {
+    const accounts = await Account.find()
+      .populate('seller', 'username rating')
+      .sort({ createdAt: -1 })
+    res.json({ success: true, accounts })
+  } catch (err) { next(err) }
+})
 
 export default router

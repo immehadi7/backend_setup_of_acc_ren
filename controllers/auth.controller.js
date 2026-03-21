@@ -1,14 +1,12 @@
 import jwt from 'jsonwebtoken'
 import User from '../models/User.js'
 
-// Generate JWT token
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN,
   })
 }
 
-// Send token response
 const sendTokenResponse = (user, statusCode, res) => {
   const token = generateToken(user._id)
   res.status(statusCode).json({
@@ -28,15 +26,12 @@ const sendTokenResponse = (user, statusCode, res) => {
 }
 
 // ─── REGISTER ───────────────────────────────────
-// POST /api/auth/register
 export const register = async (req, res, next) => {
   try {
     const { username, phone, email, password } = req.body
-
     if (!username || !password) {
       return res.status(400).json({ success: false, message: '用户名和密码不能为空' })
     }
-
     const user = await User.create({ username, phone, email, password })
     sendTokenResponse(user, 201, res)
   } catch (error) {
@@ -45,7 +40,6 @@ export const register = async (req, res, next) => {
 }
 
 // ─── LOGIN ──────────────────────────────────────
-// POST /api/auth/login
 export const login = async (req, res, next) => {
   try {
     const { username, phone, email, password } = req.body
@@ -54,17 +48,23 @@ export const login = async (req, res, next) => {
       return res.status(400).json({ success: false, message: '请输入密码' })
     }
 
-    // Find user by username, phone, or email
-    const query = username
-      ? { username }
-      : phone
-      ? { phone }
-      : { email }
+    let user = null
 
-    const user = await User.findOne(query).select('+password')
+    if (username) {
+      user = await User.findOne({ username }).select('+password')
+    } else if (phone) {
+      user = await User.findOne({ phone }).select('+password')
+    } else if (email) {
+      user = await User.findOne({ email }).select('+password')
+    }
 
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ success: false, message: '账号或密码错误' })
+    if (!user) {
+      return res.status(401).json({ success: false, message: '账号不存在' })
+    }
+
+    const isMatch = await user.matchPassword(password)
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: '密码错误' })
     }
 
     sendTokenResponse(user, 200, res)
@@ -74,7 +74,6 @@ export const login = async (req, res, next) => {
 }
 
 // ─── GET CURRENT USER ───────────────────────────
-// GET /api/auth/me  (protected)
 export const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
@@ -85,7 +84,6 @@ export const getMe = async (req, res, next) => {
 }
 
 // ─── UPDATE PROFILE ─────────────────────────────
-// PUT /api/auth/me  (protected)
 export const updateProfile = async (req, res, next) => {
   try {
     const { username, email, avatar } = req.body
@@ -101,20 +99,65 @@ export const updateProfile = async (req, res, next) => {
 }
 
 // ─── CHANGE PASSWORD ────────────────────────────
-// PUT /api/auth/password  (protected)
 export const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body
     const user = await User.findById(req.user.id).select('+password')
 
-    if (!(await user.matchPassword(currentPassword))) {
+    const isMatch = await user.matchPassword(currentPassword)
+    if (!isMatch) {
       return res.status(401).json({ success: false, message: '当前密码错误' })
     }
 
     user.password = newPassword
     await user.save()
-
     sendTokenResponse(user, 200, res)
+  } catch (error) {
+    next(error)
+  }
+}
+
+// ─── GET ALL USERS (admin only) ─────────────────
+export const getAllUsers = async (req, res, next) => {
+  try {
+    const users = await User.find().sort({ createdAt: -1 })
+    res.status(200).json({ success: true, users })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// ─── DELETE USER (admin only) ───────────────────
+export const deleteUser = async (req, res, next) => {
+  try {
+    await User.findByIdAndDelete(req.params.id)
+    res.status(200).json({ success: true, message: '用户已删除' })
+  } catch (error) {
+    next(error)
+  }
+}
+
+
+// ─── BAN / UNBAN USER (admin) ───────────────────
+export const banUser = async (req, res, next) => {
+  try {
+    const { isBanned, banReason } = req.body
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { isBanned, banReason },
+      { new: true }
+    )
+    res.status(200).json({ success: true, user })
+  } catch (error) {
+    next(error)
+  }
+}
+
+// ─── GET USER ACTIVITY (admin) ──────────────────
+export const getUserActivity = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id)
+    res.status(200).json({ success: true, user })
   } catch (error) {
     next(error)
   }

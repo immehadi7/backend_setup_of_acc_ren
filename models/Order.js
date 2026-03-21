@@ -84,14 +84,12 @@ const orderSchema = new mongoose.Schema(
 )
 
 // Auto-generate order number before saving
-orderSchema.pre('save', function (next) {
+orderSchema.pre('save', function () {
   if (!this.orderNo) {
     const timestamp = Date.now().toString()
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0')
     this.orderNo = `ZH${timestamp}${random}`
   }
-  next()
 })
-
 const Order = mongoose.model('Order', orderSchema)
 export default Order
