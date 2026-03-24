@@ -17,32 +17,29 @@ connectDB()
 const app        = express()
 const httpServer = createServer(app)
 
+// ✅ Dynamic CORS — works for localhost AND production
+const allowedOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean)
+
+const corsOptions = {
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true)
+    if (origin.startsWith('http://localhost')) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true,
+}
+
 const io = new Server(httpServer, {
-  cors: {
-    origin: function(origin, callback) {
-      if (!origin || origin.startsWith('http://localhost')) {
-        callback(null, true)
-      } else {
-        callback(new Error('Not allowed by CORS'))
-      }
-    },
-    methods:     ['GET', 'POST'],
-    credentials: true,
-  }
+  cors: corsOptions
 })
 
 // Security & utilities
 app.use(helmet())
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || origin.startsWith('http://localhost')) {
-      callback(null, true)
-    } else {
-      callback(new Error('Not allowed by CORS'))
-    }
-  },
-  credentials: true,
-}))
+app.use(cors(corsOptions))
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 if (process.env.NODE_ENV === 'development') {
@@ -95,38 +92,31 @@ const getAutoReply = (message) => {
 io.on('connection', (socket) => {
   console.log(`🔌 User connected: ${socket.id}`)
 
-  // User joins
   socket.on('user:join', (userData) => {
     onlineUsers.set(socket.id, {
       ...userData,
-      socketId:  socket.id,
-      joinedAt:  new Date(),
+      socketId: socket.id,
+      joinedAt: new Date(),
     })
     io.emit('users:online', onlineUsers.size)
-    // Send chat history
     socket.emit('chat:history', chatHistory.slice(-50))
   })
 
-  // User sends message
   socket.on('chat:message', (data) => {
     const user = onlineUsers.get(socket.id)
     const message = {
-      id:        Date.now(),
-      text:      data.text,
-      sender:    user?.username || '用户',
-      role:      user?.role     || 'user',
-      socketId:  socket.id,
-      time:      new Date().toISOString(),
-      type:      'user',
+      id:       Date.now(),
+      text:     data.text,
+      sender:   user?.username || '用户',
+      role:     user?.role     || 'user',
+      socketId: socket.id,
+      time:     new Date().toISOString(),
+      type:     'user',
     }
-
     chatHistory.push(message)
     if (chatHistory.length > 100) chatHistory.shift()
-
-    // Broadcast to all
     io.emit('chat:message', message)
 
-    // Auto reply after 1 second
     setTimeout(() => {
       const reply = {
         id:       Date.now() + 1,
@@ -142,7 +132,6 @@ io.on('connection', (socket) => {
     }, 1000)
   })
 
-  // Typing indicator
   socket.on('chat:typing', (data) => {
     socket.broadcast.emit('chat:typing', {
       ...data,
@@ -150,7 +139,6 @@ io.on('connection', (socket) => {
     })
   })
 
-  // Disconnect
   socket.on('disconnect', () => {
     onlineUsers.delete(socket.id)
     io.emit('users:online', onlineUsers.size)
