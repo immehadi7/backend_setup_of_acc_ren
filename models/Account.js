@@ -30,6 +30,18 @@ const accountSchema = new mongoose.Schema(
     originalPrice: {
       type: Number,
     },
+    
+    // --- NEW FIELDS ADDED HERE ---
+    isFlatFee: { 
+      type: Boolean, 
+      default: false 
+    },
+    deposit: { 
+      type: Number, 
+      default: 0 
+    },
+    // -----------------------------
+
     deliveryTime: {
       type: Number, // minutes
       default: 15,
@@ -40,7 +52,14 @@ const accountSchema = new mongoose.Schema(
       maxlength: [1000, '描述最多1000字'],
     },
     tags: [{ type: String, trim: true }],
-    images: [{ type: String }], // image URLs
+    
+    // --- UPDATED IMAGES FIELD ---
+    images: { 
+      type: [String], 
+      default: [] 
+    },
+    // ----------------------------
+    
     emoji: { type: String, default: '🎮' },
 
     status: {
