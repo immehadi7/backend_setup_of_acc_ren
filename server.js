@@ -23,6 +23,7 @@ const allowedOrigins = (process.env.CLIENT_URL || '')
   .map(o => o.trim())
   .filter(Boolean)
 
+// Express CORS options
 const corsOptions = {
   origin: function(origin, callback) {
     if (!origin) return callback(null, true)
@@ -33,11 +34,7 @@ const corsOptions = {
   credentials: true,
 }
 
-const io = new Server(httpServer, {
-  cors: corsOptions
-})
-
-// Security & utilities
+// Security & utilities for Express
 app.use(helmet())
 app.use(cors(corsOptions))
 app.use(express.json())
@@ -45,6 +42,25 @@ app.use(express.urlencoded({ extended: true }))
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'))
 }
+
+// ✅ Updated Socket.io setup for Netlify / Production compatibility
+const io = new Server(httpServer, {
+  cors: {
+    origin: function(origin, callback) {
+      if (!origin) return callback(null, true)
+      if (origin.startsWith('http://localhost')) return callback(null, true)
+      if (allowedOrigins.includes(origin)) return callback(null, true)
+      callback(new Error('Not allowed by CORS'))
+    },
+    methods:     ['GET', 'POST'],
+    credentials: true,
+  },
+  transports:       ['polling', 'websocket'],
+  pingTimeout:      60000,
+  pingInterval:     25000,
+  upgradeTimeout:   30000,
+  allowUpgrades:    true,
+})
 
 // Health check
 app.get('/api/health', (req, res) => {
