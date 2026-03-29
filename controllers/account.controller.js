@@ -191,3 +191,45 @@ export const getMyAccounts = async (req, res, next) => {
     next(error)
   }
 }
+
+
+// ✅ UPDATE commission & deposit (admin + seller)
+export const updateCommissionDeposit = async (req, res, next) => {
+  try {
+    const { commission, deposit } = req.body
+    const account = await Account.findById(req.params.id)
+
+    if (!account) {
+      return res.status(404).json({ success: false, message: '账号不存在' })
+    }
+
+    // Only admin or the seller can update
+    if (
+      req.user.role !== 'admin' &&
+      account.seller.toString() !== req.user.id
+    ) {
+      return res.status(403).json({ success: false, message: '无权限操作' })
+    }
+
+    // Validate commission
+    if (commission !== undefined) {
+      if (commission < 0 || commission > 100) {
+        return res.status(400).json({ success: false, message: '佣金比例必须在0-100之间' })
+      }
+      account.commission = commission
+    }
+
+    // Deposit is optional — can be null or any positive number
+    if (deposit !== undefined) {
+      if (deposit !== null && deposit < 0) {
+        return res.status(400).json({ success: false, message: '押金不能为负数' })
+      }
+      account.deposit = deposit
+    }
+
+    await account.save()
+    res.json({ success: true, account })
+  } catch (err) {
+    next(err)
+  }
+}

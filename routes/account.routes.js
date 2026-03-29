@@ -8,24 +8,28 @@ import {
   updateStatus,
   approveAccount,
   getMyAccounts,
+  updateCommissionDeposit,
 } from '../controllers/account.controller.js'
 import { protect, authorize } from '../middleware/auth.middleware.js'
 import Account from '../models/Account.js'
 
 const router = express.Router()
 
-// Public
+// ── Public ──
 router.get('/',    getAccounts)
 router.get('/:id', getAccount)
 
-// Protected
+// ── Protected ──
 router.get('/user/my',      protect, getMyAccounts)
 router.post('/',             protect, createAccount)
 router.put('/:id',           protect, updateAccount)
 router.delete('/:id',        protect, deleteAccount)
 router.patch('/:id/status',  protect, updateStatus)
 
-// Admin
+// ✅ Commission + Deposit update
+router.patch('/:id/commission-deposit', protect, updateCommissionDeposit)
+
+// ── Admin only ──
 router.patch('/:id/approve', protect, authorize('admin'), approveAccount)
 router.get('/admin/all',     protect, authorize('admin'), async (req, res, next) => {
   try {
