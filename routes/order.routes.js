@@ -13,19 +13,14 @@ import { protect, authorize } from '../middleware/auth.middleware.js'
 import Order from '../models/Order.js'
 
 const router = express.Router()
-
 router.use(protect)
 
-router.post('/',              createOrder)
-router.get('/my',             getMyOrders)
-router.get('/seller',         getSellerOrders)
-router.get('/:id',            getOrder)
-router.patch('/:id/confirm',  confirmOrder)
-router.patch('/:id/pay',      submitPayment)
-router.patch('/:id/complete', completeOrder)
-router.patch('/:id/cancel',   cancelOrder)
+// ── Fixed-path routes MUST come before /:id ────────────────────
+router.get('/my',     getMyOrders)
+router.get('/seller', getSellerOrders)
 
-// ── Seller analytics ──
+// BUG FIX #10: /seller/analytics was after /:id — Express matched
+// "analytics" as the :id param and 404'd. Moved here, before /:id.
 router.get('/seller/analytics', async (req, res, next) => {
   try {
     const orders = await Order.find({ seller: req.user.id })
@@ -33,21 +28,21 @@ router.get('/seller/analytics', async (req, res, next) => {
       .populate('buyer',   'username')
       .sort({ createdAt: -1 })
 
-    const now      = new Date()
-    const today    = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const now        = new Date()
+    const today      = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
     // Daily earnings for last 7 days
     const last7 = []
     for (let i = 6; i >= 0; i--) {
-      const d     = new Date(today)
+      const d    = new Date(today)
       d.setDate(d.getDate() - i)
-      const next  = new Date(d)
+      const next = new Date(d)
       next.setDate(next.getDate() + 1)
-      const dayOrders = orders.filter(o =>
-        o.status === 'completed' &&
-        new Date(o.createdAt) >= d &&
-        new Date(o.createdAt) < next
+      const dayOrders = orders.filter(
+        o => o.status === 'completed' &&
+             new Date(o.createdAt) >= d &&
+             new Date(o.createdAt) < next
       )
       last7.push({
         date:     d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }),
@@ -72,15 +67,9 @@ router.get('/seller/analytics', async (req, res, next) => {
     res.json({
       success: true,
       analytics: {
-        todayEarnings: orders
-          .filter(o => o.status === 'completed' && new Date(o.createdAt) >= today)
-          .reduce((s, o) => s + (o.totalAmount || 0), 0),
-        monthEarnings: orders
-          .filter(o => o.status === 'completed' && new Date(o.createdAt) >= monthStart)
-          .reduce((s, o) => s + (o.totalAmount || 0), 0),
-        totalEarnings: orders
-          .filter(o => o.status === 'completed')
-          .reduce((s, o) => s + (o.totalAmount || 0), 0),
+        todayEarnings:   orders.filter(o => o.status === 'completed' && new Date(o.createdAt) >= today).reduce((s, o) => s + (o.totalAmount || 0), 0),
+        monthEarnings:   orders.filter(o => o.status === 'completed' && new Date(o.createdAt) >= monthStart).reduce((s, o) => s + (o.totalAmount || 0), 0),
+        totalEarnings:   orders.filter(o => o.status === 'completed').reduce((s, o) => s + (o.totalAmount || 0), 0),
         totalOrders:     orders.length,
         completedOrders: orders.filter(o => o.status === 'completed').length,
         pendingOrders:   orders.filter(o => o.status === 'pending_confirmation').length,
@@ -88,12 +77,12 @@ router.get('/seller/analytics', async (req, res, next) => {
         last7Days:       last7,
         topGames,
         recentOrders:    orders.slice(0, 10),
-      }
+      },
     })
   } catch (err) { next(err) }
 })
 
-// Admin only
+// ── Admin-only all orders ──────────────────────────────────────
 router.get('/admin/all', authorize('admin'), async (req, res, next) => {
   try {
     const orders = await Order.find()
@@ -104,5 +93,13 @@ router.get('/admin/all', authorize('admin'), async (req, res, next) => {
     res.json({ success: true, orders })
   } catch (err) { next(err) }
 })
+
+// ── Dynamic :id routes LAST ────────────────────────────────────
+router.post('/',              createOrder)
+router.get('/:id',            getOrder)
+router.patch('/:id/confirm',  confirmOrder)
+router.patch('/:id/pay',      submitPayment)
+router.patch('/:id/complete', completeOrder)
+router.patch('/:id/cancel',   cancelOrder)
 
 export default router
